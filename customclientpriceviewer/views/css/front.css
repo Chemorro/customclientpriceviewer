@@ -1,36 +1,18 @@
 .custom-group-price-wrapper {
-  font-size: 1.5em; /* Un poco más pequeño que el precio para que sea una leyenda */
-  font-weight: bold; /* La leyenda no suele ser negrita */
-  vertical-align: middle; /* Para alinear con el texto del precio */
-  color: #92c020 !important; /* Mantiene el color verde específico */
-  margin-top: px; /* Espacio para separarlo del precio normal */
-  display: block; /* Asegura que ocupe una línea propia */
-
-  /* Estas propiedades de z-index y position solo son necesarias si hay superposición.
-     Si no hay problemas de visibilidad, se pueden eliminar para simplificar. */
-  z-index: 10;
-  position: relative;
-
-  /* Estilos opcionales para bordes y fondo que puedes mantener o quitar según el diseño */
-  background-color:;
-  padding: 5px;
-  border: px solid #ccc;
-  border-radius: 3px; /* Pequeño ajuste visual si te gusta */
+  display: block;
+  margin-top: 0.25rem;
+  color: #92c020;
+  font-size: 1.1rem;
+  font-weight: 700;
+  line-height: 1.2;
 }
 
-/* Ajustes para el texto PVPR y el valor del precio adicional */
 .custom-group-value {
-  /* Quitar font-weight: normal; !important; para heredar el estilo. */
-  /* Si el precio normal es negrita, este también debería heredarla */
-  margin-right: 3px; /* Espacio entre el precio y "PVPR" */
-  /* Si notas que el precio sigue sin ser negrita y el precio normal sí lo es,
-     puedes añadir aquí: font-weight: bold; */
+  margin-right: 0.25rem;
 }
 
 .custom-group-label {
-  /* Esta etiqueta "PVPR" podría ser más pequeña o menos prominente.
-     Puedes ajustar su tamaño si el precio normal no tiene una leyenda similar. */
-  font-size: 0.9em; /* Un poco más pequeño que el precio para que sea una leyenda */
-  font-weight: bold; /* La leyenda no suele ser negrita */
-  vertical-align: middle; /* Para alinear con el texto del precio */
+  font-size: 0.85em;
+  font-weight: 600;
+  text-transform: uppercase;
 }

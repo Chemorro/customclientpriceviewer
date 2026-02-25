@@ -2,7 +2,7 @@
 <module>
     <name>customclientpriceviewer</name>
     <displayName><![CDATA[Visor de Precio de Cliente Personalizado]]></displayName>
-    <version><![CDATA[1.0.0]]></version>
+    <version><![CDATA[1.0.2]]></version>
     <description><![CDATA[Muestra el precio de un cliente espec&iacute;fico en la p&aacute;gina de producto, visible solo para grupos seleccionados.]]></description>
     <author><![CDATA[Tu Nombre]]></author>
     <tab><![CDATA[front_office_features]]></tab>
