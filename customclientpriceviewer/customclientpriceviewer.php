@@ -5,50 +5,59 @@ if (!defined('_PS_VERSION_')) {
 
 class CustomClientPriceViewer extends Module
 {
-    protected $config_form = false;
+    private const CONFIG_TARGET_CUSTOMER = 'CUSTOMCLIENTPRICEVIEWER_TARGET_CUSTOMER';
+    private const CONFIG_VISIBLE_GROUPS = 'CUSTOMCLIENTPRICEVIEWER_VISIBLE_GROUPS';
 
     public function __construct()
     {
         $this->name = 'customclientpriceviewer';
         $this->tab = 'front_office_features';
-        $this->version = '1.0.0';
+        $this->version = '1.0.2';
         $this->author = 'Tu Nombre';
         $this->need_instance = 1;
         $this->bootstrap = true;
 
         parent::__construct();
 
-        $this->displayName = $this->l('Visor de Precio de Cliente Personalizado');
-        $this->description = $this->l('Muestra el precio de un cliente específico en la página de producto, visible solo para grupos seleccionados.');
-
+        $this->displayName = $this->trans('Visor de Precio de Cliente Personalizado', array(), 'Modules.Customclientpriceviewer.Admin');
+        $this->description = $this->trans('Muestra el precio de un cliente específico en la página de producto, visible solo para grupos seleccionados.', array(), 'Modules.Customclientpriceviewer.Admin');
         $this->ps_versions_compliancy = array('min' => '8.1.0', 'max' => _PS_VERSION_);
     }
 
     public function install()
     {
-        Configuration::updateValue('CUSTOMCLIENTPRICEVIEWER_TARGET_CUSTOMER', null);
-        Configuration::updateValue('CUSTOMCLIENTPRICEVIEWER_VISIBLE_GROUPS', serialize([]));
+        if (!parent::install()) {
+            return false;
+        }
 
-        return parent::install() &&
-            $this->registerHook('header') &&
-            $this->registerHook('displayProductPriceBlock');
+        if (
+            !$this->registerHook('header')
+            || !$this->registerHook('displayProductPriceBlock')
+        ) {
+            parent::uninstall();
+
+            return false;
+        }
+
+        return Configuration::updateValue(self::CONFIG_TARGET_CUSTOMER, 0)
+            && Configuration::updateValue(self::CONFIG_VISIBLE_GROUPS, json_encode(array()));
     }
 
     public function uninstall()
     {
-        Configuration::deleteByName('CUSTOMCLIENTPRICEVIEWER_TARGET_CUSTOMER');
-        Configuration::deleteByName('CUSTOMCLIENTPRICEVIEWER_VISIBLE_GROUPS');
+        Configuration::deleteByName(self::CONFIG_TARGET_CUSTOMER);
+        Configuration::deleteByName(self::CONFIG_VISIBLE_GROUPS);
+
         return parent::uninstall();
     }
 
     public function getContent()
     {
         $output = '';
-        if (((bool)Tools::isSubmit('submitCustomClientPriceViewerModule')) == true) {
+
+        if (Tools::isSubmit('submitCustomClientPriceViewerModule')) {
             $output .= $this->postProcess();
         }
-
-        $this->context->smarty->assign('module_dir', $this->_path);
 
         return $output . $this->renderForm();
     }
@@ -60,8 +69,8 @@ class CustomClientPriceViewer extends Module
         $helper->show_toolbar = false;
         $helper->table = $this->table;
         $helper->module = $this;
-        $helper->default_form_language = $this->context->language->id;
-        $helper->allow_employee_form_lang = Configuration::get('PS_BO_ALLOW_EMPLOYEE_FORM_LANG', 0);
+        $helper->default_form_language = (int) $this->context->language->id;
+        $helper->allow_employee_form_lang = (int) Configuration::get('PS_BO_ALLOW_EMPLOYEE_FORM_LANG', 0);
 
         $helper->identifier = $this->identifier;
         $helper->submit_action = 'submitCustomClientPriceViewerModule';
@@ -72,7 +81,7 @@ class CustomClientPriceViewer extends Module
         $helper->tpl_vars = array(
             'fields_value' => $this->getConfigFormValues(),
             'languages' => $this->context->controller->getLanguages(),
-            'id_language' => $this->context->language->id,
+            'id_language' => (int) $this->context->language->id,
         );
 
         return $helper->generateForm(array($this->getConfigForm()));
@@ -80,58 +89,65 @@ class CustomClientPriceViewer extends Module
 
     protected function getConfigForm()
     {
-        $groups = Group::getGroups($this->context->language->id);
-        $visible_groups_options = [];
+        $groups = Group::getGroups((int) $this->context->language->id);
+        $visibleGroupsOptions = array();
         foreach ($groups as $group) {
-            $visible_groups_options[] = [
-                'id_option' => $group['id_group'],
-                'name' => $group['name']
-            ];
+            $visibleGroupsOptions[] = array(
+                'id_option' => (int) $group['id_group'],
+                'name' => (string) $group['name'],
+            );
         }
 
         $customers = Customer::getCustomers();
-        $target_customer_options = [];
+        $targetCustomerOptions = array(
+            array(
+                'id_option' => 0,
+                'name' => $this->trans('-- Selecciona un cliente --', array(), 'Modules.Customclientpriceviewer.Admin'),
+            ),
+        );
+
         foreach ($customers as $customer) {
-            $target_customer_options[] = [
-                'id_option' => $customer['id_customer'],
-                'name' => $customer['firstname'] . ' ' . $customer['lastname'] . ' (' . $customer['email'] . ')'
-            ];
+            $targetCustomerOptions[] = array(
+                'id_option' => (int) $customer['id_customer'],
+                'name' => trim($customer['firstname'] . ' ' . $customer['lastname']) . ' (' . $customer['email'] . ')',
+            );
         }
 
         return array(
             'form' => array(
                 'legend' => array(
-                    'title' => $this->l('Configuración del Visor de Precios de Cliente'),
+                    'title' => $this->trans('Configuración del Visor de Precios de Cliente', array(), 'Modules.Customclientpriceviewer.Admin'),
                     'icon' => 'icon-user',
                 ),
                 'input' => array(
                     array(
                         'type' => 'select',
-                        'label' => $this->l('Cliente Objetivo'),
-                        'desc' => $this->l('Selecciona el cliente cuyo precio específico se mostrará.'),
-                        'name' => 'CUSTOMCLIENTPRICEVIEWER_TARGET_CUSTOMER',
+                        'label' => $this->trans('Cliente objetivo', array(), 'Modules.Customclientpriceviewer.Admin'),
+                        'desc' => $this->trans('Selecciona el cliente cuyo precio específico se mostrará.', array(), 'Modules.Customclientpriceviewer.Admin'),
+                        'name' => self::CONFIG_TARGET_CUSTOMER,
+                        'required' => true,
                         'options' => array(
-                            'query' => $target_customer_options,
+                            'query' => $targetCustomerOptions,
                             'id' => 'id_option',
-                            'name' => 'name'
+                            'name' => 'name',
                         ),
                     ),
                     array(
                         'type' => 'select',
-                        'label' => $this->l('Grupos de Clientes que Verán este Precio'),
-                        'desc' => $this->l('Selecciona los grupos que podrán ver el precio del cliente objetivo. Mantén CTRL para seleccionar varios.'),
-                        'name' => 'CUSTOMCLIENTPRICEVIEWER_VISIBLE_GROUPS[]',
+                        'label' => $this->trans('Grupos con visibilidad', array(), 'Modules.Customclientpriceviewer.Admin'),
+                        'desc' => $this->trans('Selecciona los grupos que podrán ver este precio.', array(), 'Modules.Customclientpriceviewer.Admin'),
+                        'name' => self::CONFIG_VISIBLE_GROUPS . '[]',
                         'multiple' => true,
                         'class' => 'chosen',
                         'options' => array(
-                            'query' => $visible_groups_options,
+                            'query' => $visibleGroupsOptions,
                             'id' => 'id_option',
-                            'name' => 'name'
+                            'name' => 'name',
                         ),
                     ),
                 ),
                 'submit' => array(
-                    'title' => $this->l('Guardar'),
+                    'title' => $this->trans('Guardar', array(), 'Admin.Actions'),
                 ),
             ),
         );
@@ -139,134 +155,217 @@ class CustomClientPriceViewer extends Module
 
     protected function getConfigFormValues()
     {
-        $visible_groups = Configuration::get('CUSTOMCLIENTPRICEVIEWER_VISIBLE_GROUPS');
-        $visible_groups_array = $visible_groups ? unserialize($visible_groups) : [];
-
         return array(
-            'CUSTOMCLIENTPRICEVIEWER_TARGET_CUSTOMER' => Configuration::get('CUSTOMCLIENTPRICEVIEWER_TARGET_CUSTOMER'),
-            'CUSTOMCLIENTPRICEVIEWER_VISIBLE_GROUPS[]' => $visible_groups_array,
+            self::CONFIG_TARGET_CUSTOMER => (int) Configuration::get(self::CONFIG_TARGET_CUSTOMER),
+            self::CONFIG_VISIBLE_GROUPS . '[]' => $this->getVisibleGroupsConfig(),
         );
     }
 
     protected function postProcess()
     {
-        if (Tools::isSubmit('submitCustomClientPriceViewerModule')) {
-            $target_customer = (int)Tools::getValue('CUSTOMCLIENTPRICEVIEWER_TARGET_CUSTOMER');
-            $visible_groups_raw = Tools::getValue('CUSTOMCLIENTPRICEVIEWER_VISIBLE_GROUPS');
-            $visible_groups = is_array($visible_groups_raw) ? $visible_groups_raw : [];
+        $targetCustomerId = (int) Tools::getValue(self::CONFIG_TARGET_CUSTOMER);
+        $visibleGroupsRaw = Tools::getValue(self::CONFIG_VISIBLE_GROUPS);
+        $visibleGroups = $this->sanitizeVisibleGroups($visibleGroupsRaw);
 
-            Configuration::updateValue('CUSTOMCLIENTPRICEVIEWER_TARGET_CUSTOMER', $target_customer);
-            Configuration::updateValue('CUSTOMCLIENTPRICEVIEWER_VISIBLE_GROUPS', serialize($visible_groups));
-
-            return $this->displayConfirmation($this->l('Configuración actualizada correctamente.'));
+        if (!Validate::isUnsignedId($targetCustomerId) || $targetCustomerId <= 0) {
+            return $this->displayError($this->trans('Debes seleccionar un cliente válido.', array(), 'Modules.Customclientpriceviewer.Admin'));
         }
-        return '';
+
+        $targetCustomer = new Customer($targetCustomerId);
+        if (!Validate::isLoadedObject($targetCustomer)) {
+            return $this->displayError($this->trans('El cliente seleccionado no existe.', array(), 'Modules.Customclientpriceviewer.Admin'));
+        }
+
+        if (!Configuration::updateValue(self::CONFIG_TARGET_CUSTOMER, $targetCustomerId)) {
+            return $this->displayError($this->trans('No se pudo guardar el cliente objetivo.', array(), 'Modules.Customclientpriceviewer.Admin'));
+        }
+
+        if (!Configuration::updateValue(self::CONFIG_VISIBLE_GROUPS, json_encode($visibleGroups))) {
+            return $this->displayError($this->trans('No se pudieron guardar los grupos visibles.', array(), 'Modules.Customclientpriceviewer.Admin'));
+        }
+
+        return $this->displayConfirmation($this->trans('Configuración actualizada correctamente.', array(), 'Modules.Customclientpriceviewer.Admin'));
     }
 
     public function hookHeader()
     {
-        $this->context->controller->addCSS($this->_path . 'views/css/front.css');
+        if (!$this->context->controller) {
+            return;
+        }
+
+        $this->context->controller->registerStylesheet(
+            $this->name . '-front',
+            'modules/' . $this->name . '/views/css/front.css',
+            array('media' => 'all', 'priority' => 150)
+        );
     }
 
     public function hookDisplayProductPriceBlock($params)
     {
-        if ($params['type'] !== 'custom_price') {
+        if (!isset($params['type']) || $params['type'] !== 'custom_price') {
             return;
         }
 
-        $id_product = (int)Tools::getValue('id_product');
-        if (!$id_product && isset($params['product']) && is_object($params['product'])) {
-            $id_product = (int)$params['product']->id;
-        } elseif (!$id_product && isset($params['product']['id_product'])) {
-            $id_product = (int)$params['product']['id_product'];
-        }
-
-        if (!$id_product) {
+        $targetCustomerId = (int) Configuration::get(self::CONFIG_TARGET_CUSTOMER);
+        $visibleGroups = $this->getVisibleGroupsConfig();
+        if ($targetCustomerId <= 0 || empty($visibleGroups)) {
             return;
         }
 
-        $product = new Product($id_product, false, $this->context->language->id);
+        $targetCustomer = new Customer($targetCustomerId);
+        if (!Validate::isLoadedObject($targetCustomer)) {
+            return;
+        }
+
+        $idProduct = $this->resolveProductId($params);
+        if ($idProduct <= 0) {
+            return;
+        }
+
+        $product = new Product($idProduct, false, (int) $this->context->language->id);
         if (!Validate::isLoadedObject($product)) {
             return;
         }
 
-        $target_customer_id = (int)Configuration::get('CUSTOMCLIENTPRICEVIEWER_TARGET_CUSTOMER');
-        $visible_groups_serialized = Configuration::get('CUSTOMCLIENTPRICEVIEWER_VISIBLE_GROUPS');
-        $visible_groups = $visible_groups_serialized ? unserialize($visible_groups_serialized) : [];
-
-        if (!$target_customer_id || empty($visible_groups)) {
+        if (!$this->canCurrentVisitorSeeCustomPrice($visibleGroups)) {
             return;
         }
 
-        $current_customer_groups = Customer::getGroupsStatic((int)$this->context->customer->id);
-        $can_see_price = false;
-        if ($this->context->customer->isLogged()) {
-            foreach ($current_customer_groups as $customer_group_id) {
-                if (in_array($customer_group_id, $visible_groups)) {
-                    $can_see_price = true;
-                    break;
-                }
-            }
-        } else {
-            $id_default_visitor_group = (int)Configuration::get('PS_UNIDENTIFIED_GROUP');
-            $id_default_guest_group = (int)Configuration::get('PS_GUEST_GROUP');
-            if (in_array($id_default_visitor_group, $visible_groups) || in_array($id_default_guest_group, $visible_groups)) {
-                $can_see_price = true;
-            }
-        }
+        $idProductAttribute = $this->resolveProductAttributeId($params);
+        $useTax = Product::getTaxCalculationMethod((int) $this->context->customer->id) != PS_TAX_EXC;
+        $specificPriceOutput = null;
 
-        if (!$can_see_price) {
-            return;
-        }
-
-        $id_product_attribute = null;
-        if (isset($params['product_attribute_id'])) {
-            $id_product_attribute = (int)$params['product_attribute_id'];
-        } elseif (Tools::getIsset('id_product_attribute')) {
-            $id_product_attribute = (int)Tools::getValue('id_product_attribute');
-        }
-        if (!$id_product_attribute && isset($params['product']) && isset($params['product']->id_product_attribute)) {
-            $id_product_attribute = (int)$params['product']->id_product_attribute;
-        }
-        $id_product_attribute = $id_product_attribute ?: null;
-
-        $use_tax = Product::getTaxCalculationMethod((int)$this->context->customer->id) != PS_TAX_EXC;
-        $specific_price_output = null;
-        $customer_price = Product::getPriceStatic(
-            $id_product,
-            $use_tax = true,
-            $id_product_attribute,
+        $customerPrice = Product::getPriceStatic(
+            $idProduct,
+            $useTax,
+            $idProductAttribute,
             6,
             null,
             false,
             true,
             1,
             false,
-            $target_customer_id, // Use the target customer ID here
+            $targetCustomerId,
             null,
             null,
-            $specific_price_output,
+            $specificPriceOutput,
             true,
             true,
             $this->context,
             true,
-            null, // $id_group is null as we are using customer price
             null,
-            true // $use_customer_price is true to fetch specific price for the customer
+            null,
+            true
         );
 
-        if ($customer_price === null || $customer_price === false) {
+        if ($customerPrice === null || $customerPrice === false) {
             return;
         }
 
-        $target_customer = new Customer($target_customer_id);
-        $target_customer_name = Validate::isLoadedObject($target_customer) ? $target_customer->firstname . ' ' . $target_customer->lastname : $this->l('Cliente Especial');
-
         $this->context->smarty->assign(array(
-            'custom_group_price' => Tools::displayPrice($customer_price),
-            'custom_group_name' => $target_customer_name . ' ' . $this->l('Price'),
+            'custom_group_price' => Tools::displayPrice($customerPrice),
+            'custom_group_label' => $this->trans('PVP', array(), 'Modules.Customclientpriceviewer.Shop'),
         ));
 
         return $this->display(__FILE__, 'views/templates/hook/displayProductGroupPrice.tpl');
+    }
+
+    private function sanitizeVisibleGroups($visibleGroupsRaw)
+    {
+        if (!is_array($visibleGroupsRaw)) {
+            return array();
+        }
+
+        $availableGroupIds = array();
+        foreach (Group::getGroups((int) $this->context->language->id) as $group) {
+            $availableGroupIds[] = (int) $group['id_group'];
+        }
+
+        $sanitized = array();
+        foreach ($visibleGroupsRaw as $groupId) {
+            $groupId = (int) $groupId;
+            if (Validate::isUnsignedId($groupId) && in_array($groupId, $availableGroupIds, true)) {
+                $sanitized[] = $groupId;
+            }
+        }
+
+        return array_values(array_unique($sanitized));
+    }
+
+    private function resolveProductId($params)
+    {
+        $idProduct = (int) Tools::getValue('id_product');
+        if ($idProduct > 0) {
+            return $idProduct;
+        }
+
+        if (isset($params['product']) && is_object($params['product']) && isset($params['product']->id)) {
+            return (int) $params['product']->id;
+        }
+
+        if (isset($params['product']) && is_array($params['product']) && isset($params['product']['id_product'])) {
+            return (int) $params['product']['id_product'];
+        }
+
+        return 0;
+    }
+
+    private function resolveProductAttributeId($params)
+    {
+        if (isset($params['product_attribute_id'])) {
+            return (int) $params['product_attribute_id'];
+        }
+
+        if (Tools::getIsset('id_product_attribute')) {
+            return (int) Tools::getValue('id_product_attribute');
+        }
+
+        if (isset($params['product']) && is_object($params['product']) && isset($params['product']->id_product_attribute)) {
+            return (int) $params['product']->id_product_attribute;
+        }
+
+        return null;
+    }
+
+    private function canCurrentVisitorSeeCustomPrice(array $visibleGroups)
+    {
+        if ($this->context->customer->isLogged()) {
+            $currentCustomerGroups = Customer::getGroupsStatic((int) $this->context->customer->id);
+            foreach ($currentCustomerGroups as $customerGroupId) {
+                if (in_array((int) $customerGroupId, $visibleGroups, true)) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        $visitorGroupId = (int) Configuration::get('PS_UNIDENTIFIED_GROUP');
+        $guestGroupId = (int) Configuration::get('PS_GUEST_GROUP');
+
+        return in_array($visitorGroupId, $visibleGroups, true) || in_array($guestGroupId, $visibleGroups, true);
+    }
+
+    private function getVisibleGroupsConfig()
+    {
+        $visibleGroupsRaw = (string) Configuration::get(self::CONFIG_VISIBLE_GROUPS);
+        if ($visibleGroupsRaw === '') {
+            return array();
+        }
+
+        $visibleGroups = json_decode($visibleGroupsRaw, true);
+        if (!is_array($visibleGroups)) {
+            return array();
+        }
+
+        $sanitized = array();
+        foreach ($visibleGroups as $groupId) {
+            $groupId = (int) $groupId;
+            if (Validate::isUnsignedId($groupId)) {
+                $sanitized[] = $groupId;
+            }
+        }
+
+        return array_values(array_unique($sanitized));
     }
 }
